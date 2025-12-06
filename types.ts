@@ -23,3 +23,6 @@ export interface ChatMessage {
   text: string;
   timestamp: Date;
 }
+
+// Registro de horários ocupados: chave "DATA-HORA" -> { court: bool, gourmet: bool }
+export type BookedSlots = Record<string, { court: boolean; gourmet: boolean }>;

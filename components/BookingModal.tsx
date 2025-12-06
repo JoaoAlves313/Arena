@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Clock, CheckCircle, MapPin, Activity, CircleDot, Utensils, ArrowRight, Layers } from 'lucide-react';
-import { BookingForm, BookingSlot } from '../types';
+import { X, Calendar, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Clock, CheckCircle, MapPin, Activity, CircleDot, Utensils, ArrowRight, Layers, Copy, QrCode, DollarSign, Hourglass, Lock, Unlock } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { BookingForm, BookingSlot, BookedSlots } from '../types';
 
 interface BookingModalProps {
   isOpen: boolean;
   onClose: () => void;
   courtName: string; 
+  bookedSlots: BookedSlots;
+  onBookSlots: (slots: BookedSlots) => void;
+  isAdmin?: boolean;
 }
 
-type BookingStep = 'calendar' | 'form' | 'success';
+type BookingStep = 'calendar' | 'form' | 'payment' | 'success';
 type SelectionMode = 'court' | 'gourmet';
 
 interface TimeSlot {
@@ -16,10 +20,7 @@ interface TimeSlot {
   time: string;
 }
 
-// Registro de horários ocupados: chave "DATA-HORA" -> { court: bool, gourmet: bool }
-type BookedSlots = Record<string, { court: boolean; gourmet: boolean }>;
-
-const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName }) => {
+const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName, bookedSlots, onBookSlots, isAdmin = false }) => {
   const START_DATE_LIMIT = new Date(2025, 11, 29); // 29 Dez 2025
   
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(START_DATE_LIMIT); 
@@ -32,7 +33,8 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
   const [selectedCourtSlots, setSelectedCourtSlots] = useState<TimeSlot[]>([]);
   const [selectedGourmetSlots, setSelectedGourmetSlots] = useState<TimeSlot[]>([]);
   
-  const [bookedSlots, setBookedSlots] = useState<BookedSlots>({});
+  // Estado para feedback de cópia do pix
+  const [copied, setCopied] = useState(false);
 
   const [formData, setFormData] = useState<BookingForm>({
     courtSlots: [],
@@ -40,6 +42,9 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
     sport: 'volei',
     includeBall: false
   });
+
+  // Pix Code Mock
+  const PIX_CODE = "00020126580014BR.GOV.BCB.PIX0136a1b2c3d4-e5f6-4789-8012-3456789012345204000053039865802BR5913ARENA PE AREIA6008BRASIL62070503***6304E2CA";
 
   // Preços
   const COURT_PRICE = 120;
@@ -67,6 +72,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
       });
       setSelectedCourtSlots([]);
       setSelectedGourmetSlots([]);
+      setCopied(false);
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'auto';
@@ -87,9 +93,9 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
 
   const getDaysInWeek = (startDate: Date) => {
     const days = [];
-    for (let i = 0; i < 7; i++) {
+    for (let i = 7; i < 14; i++) {
       const d = new Date(startDate);
-      d.setDate(startDate.getDate() + i);
+      d.setDate(startDate.getDate() + (i - 7));
       days.push(d);
     }
     return days;
@@ -133,7 +139,26 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
   const handleSlotClick = (date: Date, time: string) => {
     const dateStr = date.toISOString().split('T')[0];
     const slotKey = `${dateStr}-${time}`;
-    const status = bookedSlots[slotKey];
+    const status = bookedSlots[slotKey] || { court: false, gourmet: false };
+
+    // --- ADMIN LOGIC ---
+    if (isAdmin) {
+        // Toggle the booked status instantly
+        const newSlots = { ...bookedSlots };
+        const currentStatus = newSlots[slotKey] || { court: false, gourmet: false };
+        
+        if (selectionMode === 'court') {
+            newSlots[slotKey] = { ...currentStatus, court: !currentStatus.court };
+        } else {
+            newSlots[slotKey] = { ...currentStatus, gourmet: !currentStatus.gourmet };
+        }
+        
+        // Clean up empty keys if needed, but not strictly necessary for this logic
+        onBookSlots(newSlots);
+        return;
+    }
+
+    // --- CLIENT LOGIC ---
 
     // Verifica bloqueio baseado no modo atual
     if (selectionMode === 'court' && status?.court) return;
@@ -162,7 +187,6 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
     if (selectedCourtSlots.length === 0 && selectedGourmetSlots.length === 0) return;
     
     // Atualiza o formData com os dados da seleção
-    // Convert TimeSlot (Date obj) to BookingSlot (date string)
     setFormData(prev => ({ 
       ...prev, 
       courtSlots: selectedCourtSlots.map(s => ({
@@ -177,35 +201,40 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
     setStep('form');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleProceedToPayment = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Salva a reserva no "banco"
-    setBookedSlots(prev => {
-      const newBooked = { ...prev };
-      
-      formData.courtSlots.forEach(slot => {
-        const slotKey = `${slot.date}-${slot.time}`;
-        newBooked[slotKey] = { ...newBooked[slotKey], court: true };
-      });
-
-      formData.gourmetSlots.forEach(slot => {
-        const slotKey = `${slot.date}-${slot.time}`;
-        newBooked[slotKey] = { ...newBooked[slotKey], gourmet: true };
-      });
-      
-      return newBooked;
-    });
-
-    setTimeout(() => {
-      setStep('success');
-      setTimeout(() => {
-        onClose();
-      }, 3000);
-    }, 1000);
+    setStep('payment');
   };
 
-  // Helper para agrupar slots por data (Step Form e Success)
+  const handleConfirmPayment = () => {
+    // Atualiza o estado global com os novos slots ocupados
+    const newBooked = { ...bookedSlots };
+    
+    formData.courtSlots.forEach(slot => {
+      const slotKey = `${slot.date}-${slot.time}`;
+      newBooked[slotKey] = { ...newBooked[slotKey], court: true };
+    });
+
+    formData.gourmetSlots.forEach(slot => {
+      const slotKey = `${slot.date}-${slot.time}`;
+      newBooked[slotKey] = { ...newBooked[slotKey], gourmet: true };
+    });
+      
+    onBookSlots(newBooked);
+
+    setStep('success');
+    setTimeout(() => {
+      onClose();
+    }, 6000); // Mais tempo para ler a mensagem
+  };
+
+  const copyPix = () => {
+    navigator.clipboard.writeText(PIX_CODE);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Helper para agrupar slots por data
   const getGroupedSlots = () => {
     const groups: Record<string, { court: string[], gourmet: string[] }> = {};
 
@@ -246,17 +275,34 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
 
   const totalSelectedCount = selectedCourtSlots.length + selectedGourmetSlots.length;
 
+  // --- Animation Variants ---
+  const variants = {
+    initial: { opacity: 0, x: 20 },
+    animate: { opacity: 1, x: 0 },
+    exit: { opacity: 0, x: -20 },
+  };
+
+  const transition = {
+    type: "tween",
+    ease: "easeInOut",
+    duration: 0.3
+  };
+
   // --- Render Helpers ---
 
   return (
     <div className="fixed inset-0 z-[60] bg-white animate-fade-in flex flex-col">
       
       {/* Header Fixo */}
-      <div className="bg-sand px-6 py-4 flex justify-between items-center text-white shadow-md z-20 shrink-0">
+      <div className={`px-6 py-4 flex justify-between items-center text-white shadow-md z-20 shrink-0 ${isAdmin ? 'bg-stone-800' : 'bg-sand'}`}>
         <h2 className="text-2xl font-bold flex items-center gap-3">
           <Calendar size={28} />
-          {step === 'calendar' ? `Agenda - ${courtName}` : 'Detalhes da Reserva'}
+          {isAdmin ? `Gerenciamento - ${courtName}` : 
+           step === 'calendar' ? `Agenda - ${courtName}` : 
+           step === 'payment' ? 'Pagamento' : 
+           'Detalhes da Solicitação'}
         </h2>
+        {isAdmin && <span className="text-xs bg-red-500 text-white px-2 py-1 rounded">Modo Editor</span>}
         <button 
           onClick={onClose} 
           className="hover:bg-white/20 p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-white"
@@ -265,10 +311,19 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
         </button>
       </div>
 
-      <div className="flex-1 overflow-hidden bg-stone-50 flex flex-col">
+      <div className="flex-1 overflow-hidden bg-stone-50 flex flex-col relative">
+        <AnimatePresence mode="wait">
         
         {step === 'calendar' && (
-          <div className="h-full flex flex-col relative">
+          <motion.div
+            key="calendar"
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            variants={variants}
+            transition={transition}
+            className="h-full flex flex-col relative w-full"
+          >
             
             {/* --- Resource Tabs --- */}
             <div className="bg-white p-2 flex justify-center border-b border-stone-100 shadow-sm shrink-0 gap-4 pt-4">
@@ -281,8 +336,8 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
                   }`}
                 >
                   <Activity size={20} />
-                  Selecionar Quadra
-                  {selectedCourtSlots.length > 0 && <span className="bg-white/20 px-2 rounded-full text-xs">{selectedCourtSlots.length}h</span>}
+                  {isAdmin ? 'Editar Quadra' : 'Selecionar Quadra'}
+                  {!isAdmin && selectedCourtSlots.length > 0 && <span className="bg-white/20 px-2 rounded-full text-xs">{selectedCourtSlots.length}h</span>}
                 </button>
 
                 <button
@@ -294,8 +349,8 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
                   }`}
                 >
                   <Utensils size={20} />
-                  Selecionar Gourmet
-                  {selectedGourmetSlots.length > 0 && <span className="bg-white/20 px-2 rounded-full text-xs">{selectedGourmetSlots.length}h</span>}
+                  {isAdmin ? 'Editar Gourmet' : 'Selecionar Gourmet'}
+                  {!isAdmin && selectedGourmetSlots.length > 0 && <span className="bg-white/20 px-2 rounded-full text-xs">{selectedGourmetSlots.length}h</span>}
                 </button>
             </div>
 
@@ -349,6 +404,11 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
 
             {/* Grid */}
             <div className="flex-1 overflow-auto p-2 sm:p-6 pb-24">
+              {isAdmin && (
+                <div className="text-center mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
+                   Clique nos horários para alternar entre <strong>Disponível</strong> e <strong>Ocupado</strong> instantaneamente.
+                </div>
+              )}
               <div className="grid grid-cols-7 gap-2 sm:gap-4 min-w-[1000px] h-full">
                 {currentWeekDays.map((day, index) => {
                    const isWeekend = day.getDay() === 0 || day.getDay() === 6;
@@ -369,47 +429,61 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
                           const slotKey = `${dateStr}-${hour}`;
                           const status = bookedSlots[slotKey] || { court: false, gourmet: false };
                           
-                          // Verificação de Seleção do Usuário
-                          const isSelectedCourt = selectedCourtSlots.some(s => s.date.toISOString().split('T')[0] === dateStr && s.time === hour);
-                          const isSelectedGourmet = selectedGourmetSlots.some(s => s.date.toISOString().split('T')[0] === dateStr && s.time === hour);
+                          // Verificação de Seleção do Usuário (SÓ PARA CLIENTE)
+                          const isSelectedCourt = !isAdmin && selectedCourtSlots.some(s => s.date.toISOString().split('T')[0] === dateStr && s.time === hour);
+                          const isSelectedGourmet = !isAdmin && selectedGourmetSlots.some(s => s.date.toISOString().split('T')[0] === dateStr && s.time === hour);
 
                           // Estados de Disponibilidade
                           // Bloqueado se já ocupado no backend (exceto se for nossa seleção atual)
-                          const isCourtBlocked = status.court && !isSelectedCourt;
-                          const isGourmetBlocked = status.gourmet && !isSelectedGourmet;
+                          // Se for ADMIN, nada é bloqueado visualmente no sentido de 'disable', mas mostramos o status
+                          const isCourtOccupied = status.court;
+                          const isGourmetOccupied = status.gourmet;
 
                           let isDisabled = false;
-                          if (selectionMode === 'court' && isCourtBlocked) isDisabled = true;
-                          if (selectionMode === 'gourmet' && isGourmetBlocked) isDisabled = true;
+                          if (!isAdmin) {
+                              if (selectionMode === 'court' && isCourtOccupied && !isSelectedCourt) isDisabled = true;
+                              if (selectionMode === 'gourmet' && isGourmetOccupied && !isSelectedGourmet) isDisabled = true;
+                          }
                           
                           // Estilos dinâmicos
                           let btnStyle = "bg-white border-stone-200 text-stone-600 hover:border-sand hover:shadow-sm";
                           let inlineStyle = {};
+                          let adminIcon = null;
 
-                          if (isDisabled) {
-                             btnStyle = "bg-stone-100 text-stone-300 border-transparent cursor-not-allowed";
+                          if (isAdmin) {
+                              // Estilo Admin
+                              const isOccupied = selectionMode === 'court' ? isCourtOccupied : isGourmetOccupied;
+                              if (isOccupied) {
+                                  btnStyle = "bg-red-50 text-red-600 border-red-300 font-bold shadow-inner";
+                                  adminIcon = <Lock size={14} className="ml-1" />;
+                              } else {
+                                  btnStyle = "bg-green-50 text-green-700 border-green-200 hover:bg-green-100 font-medium";
+                                  adminIcon = <Unlock size={14} className="ml-1 opacity-50" />;
+                              }
                           } else {
-                             // Lógica de Visualização Híbrida
-                             if (isSelectedCourt && isSelectedGourmet) {
-                                inlineStyle = { background: 'linear-gradient(135deg, #3b82f6 50%, #a855f7 50%)' };
-                                btnStyle = "text-white border-transparent ring-2 ring-stone-300 font-bold shadow-md transform scale-105";
-                             } else if (isSelectedCourt) {
-                                btnStyle = "bg-blue-500 border-blue-600 text-white font-bold shadow-md ring-1 ring-blue-300";
-                                // Se estiver no modo gourmet, mostra opaco pra indicar que tem algo lá
-                                if (selectionMode === 'gourmet') btnStyle += " opacity-60"; 
-                             } else if (isSelectedGourmet) {
-                                btnStyle = "bg-purple-500 border-purple-600 text-white font-bold shadow-md ring-1 ring-purple-300";
-                                if (selectionMode === 'court') btnStyle += " opacity-60";
-                             } else {
-                                // Se vazio, verificar ocupação "visual" do outro recurso
-                                if (status.court && status.gourmet) {
-                                   inlineStyle = { background: 'linear-gradient(135deg, #3b82f6 50%, #a855f7 50%)', opacity: 0.3 };
-                                } else if (status.court) {
-                                   btnStyle += " border-l-4 border-l-blue-400";
-                                } else if (status.gourmet) {
-                                   btnStyle += " border-r-4 border-r-purple-400";
-                                }
-                             }
+                              // Estilo Cliente (Lógica Original)
+                              if (isDisabled) {
+                                 btnStyle = "bg-stone-50 text-red-400 border-stone-200 cursor-not-allowed opacity-60 font-medium";
+                              } else {
+                                 if (isSelectedCourt && isSelectedGourmet) {
+                                    inlineStyle = { background: 'linear-gradient(135deg, #eff6ff 50%, #faf5ff 50%)' };
+                                    btnStyle = "text-red-600 border-stone-300 font-bold shadow-md transform scale-105 border-2";
+                                 } else if (isSelectedCourt) {
+                                    btnStyle = "bg-blue-50 border-blue-500 text-red-600 font-bold shadow-md ring-1 ring-blue-300 border-2";
+                                    if (selectionMode === 'gourmet') btnStyle += " opacity-60"; 
+                                 } else if (isSelectedGourmet) {
+                                    btnStyle = "bg-purple-50 border-purple-500 text-red-600 font-bold shadow-md ring-1 ring-purple-300 border-2";
+                                    if (selectionMode === 'court') btnStyle += " opacity-60";
+                                 } else {
+                                    if (status.court && status.gourmet) {
+                                       inlineStyle = { background: 'linear-gradient(135deg, #dbeafe 50%, #f3e8ff 50%)', opacity: 0.5 };
+                                    } else if (status.court) {
+                                       btnStyle += " border-l-4 border-l-blue-400 bg-stone-50";
+                                    } else if (status.gourmet) {
+                                       btnStyle += " border-r-4 border-r-purple-400 bg-stone-50";
+                                    }
+                                 }
+                              }
                           }
 
                           return (
@@ -418,9 +492,10 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
                               onClick={() => handleSlotClick(day, hour)}
                               disabled={isDisabled}
                               style={inlineStyle}
-                              className={`w-full py-4 px-2 text-lg border rounded-lg transition-all font-medium focus:outline-none ${btnStyle}`}
+                              className={`w-full py-4 px-2 text-lg border rounded-lg transition-all font-medium focus:outline-none flex items-center justify-center ${btnStyle}`}
                             >
                               {hour}
+                              {adminIcon}
                             </button>
                           );
                         })}
@@ -431,9 +506,14 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
               </div>
             </div>
 
-            {/* Floating Action Button */}
-            {totalSelectedCount > 0 && (
-              <div className="absolute bottom-6 right-6 z-30 animate-bounce-in">
+            {/* Floating Action Button (Only for Client) */}
+            {!isAdmin && totalSelectedCount > 0 && (
+              <motion.div 
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0 }}
+                className="absolute bottom-6 right-6 z-30"
+              >
                  <button 
                   onClick={handleProceedToForm}
                   className="bg-stone-800 text-white px-8 py-4 rounded-full shadow-2xl flex items-center gap-3 hover:bg-stone-900 transition-all transform hover:scale-105"
@@ -450,14 +530,35 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
                      <ArrowRight size={24} />
                    </div>
                  </button>
-              </div>
+              </motion.div>
             )}
-          </div>
+            
+            {/* Admin Close Button */}
+            {isAdmin && (
+               <div className="absolute bottom-6 right-6 z-30">
+                 <button 
+                  onClick={onClose}
+                  className="bg-red-600 text-white px-8 py-4 rounded-full shadow-2xl flex items-center gap-3 hover:bg-red-700 transition-all"
+                 >
+                   <CheckCircle size={24} />
+                   <span className="font-bold">Concluir Edição</span>
+                 </button>
+               </div>
+            )}
+          </motion.div>
         )}
 
         {step === 'form' && (
-          <div className="flex-1 overflow-y-auto flex items-center justify-center p-4">
-            <div className="w-full max-w-2xl bg-white p-8 rounded-3xl shadow-xl animate-fade-in border border-stone-100">
+          <motion.div
+            key="form"
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            variants={variants}
+            transition={transition}
+            className="flex-1 overflow-y-auto flex items-center justify-center p-4 w-full"
+          >
+            <div className="w-full max-w-2xl bg-white p-8 rounded-3xl shadow-xl border border-stone-100">
               
               {/* Header do Form */}
               <div className="mb-6 bg-stone-50 border border-stone-100 p-6 rounded-2xl">
@@ -519,7 +620,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleProceedToPayment} className="space-y-6">
                 
                 {/* Opções Quadra */}
                 {formData.courtSlots.length > 0 && (
@@ -592,22 +693,97 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
                 </div>
               </form>
             </div>
-          </div>
+          </motion.div>
+        )}
+
+        {step === 'payment' && (
+          <motion.div
+            key="payment"
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            variants={variants}
+            transition={transition}
+            className="flex-1 overflow-y-auto flex items-center justify-center p-4 bg-stone-100 w-full"
+          >
+             <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-xl border border-stone-200 text-center">
+                <div className="flex justify-center mb-6">
+                   <div className="bg-ocean/10 p-4 rounded-full text-ocean">
+                     <QrCode size={40} />
+                   </div>
+                </div>
+                
+                <h3 className="text-2xl font-bold text-stone-800 mb-2">Pagamento via Pix</h3>
+                <p className="text-stone-600 mb-6">Escaneie o QR Code ou copie o código abaixo para solicitar sua reserva.</p>
+                
+                <div className="flex justify-center mb-8">
+                   <div className="p-4 border-2 border-stone-100 rounded-2xl shadow-inner bg-white">
+                      {/* Placeholder for QR Code */}
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(PIX_CODE)}`} 
+                        alt="QR Code Pix" 
+                        className="w-48 h-48 object-contain"
+                      />
+                   </div>
+                </div>
+
+                <div className="mb-8">
+                  <div className="flex items-center gap-2 bg-stone-50 border border-stone-200 rounded-xl p-2 relative">
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value={PIX_CODE} 
+                      className="w-full bg-transparent text-stone-500 text-xs truncate pl-2 outline-none" 
+                    />
+                    <button 
+                      onClick={copyPix}
+                      className="bg-stone-800 hover:bg-stone-900 text-white p-2 rounded-lg transition-colors flex items-center gap-2 shrink-0 text-sm font-bold px-4"
+                    >
+                      {copied ? <CheckCircle size={16} /> : <Copy size={16} />}
+                      {copied ? 'Copiado!' : 'Copiar'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <button
+                    onClick={handleConfirmPayment}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold text-lg py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle size={20} />
+                    Já paguei, Solicitar Reserva
+                  </button>
+                  <button
+                    onClick={() => setStep('form')}
+                    className="w-full py-3 text-stone-500 hover:text-stone-700 font-semibold text-sm transition-colors"
+                  >
+                    Voltar para resumo
+                  </button>
+                </div>
+             </div>
+          </motion.div>
         )}
 
         {step === 'success' && (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-8 animate-fade-in bg-stone-50">
-            <div className="w-32 h-32 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-8 animate-bounce shadow-lg">
-              <CheckCircle size={64} />
+          <motion.div
+            key="success"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.1 }}
+            transition={transition}
+            className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-stone-50 w-full"
+          >
+            <div className="w-32 h-32 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mb-8 animate-pulse shadow-lg">
+              <Hourglass size={64} />
             </div>
-            <h3 className="text-4xl font-bold text-stone-800 mb-4">Reserva Confirmada!</h3>
+            <h3 className="text-4xl font-bold text-stone-800 mb-4">Solicitação Enviada!</h3>
             <p className="text-xl text-stone-600 mb-8 max-w-lg mx-auto">
-              Seu agendamento foi realizado com sucesso.
+              Recebemos seu comprovante. O administrador irá confirmar sua reserva em breve. Fique de olho no WhatsApp!
             </p>
             
             <div className="max-w-2xl w-full bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden">
                <div className="bg-stone-50 px-6 py-4 border-b border-stone-100 text-left">
-                  <h4 className="font-bold text-stone-700">Resumo dos Horários</h4>
+                  <h4 className="font-bold text-stone-700">Resumo da Solicitação</h4>
                </div>
                <div className="p-6 max-h-[300px] overflow-y-auto">
                  {getGroupedSlots().map(([date, times]) => (
@@ -615,12 +791,12 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
                        <p className="font-bold text-stone-800 mb-2">{formatIsoDateDisplay(date)}</p>
                        <div className="flex flex-wrap gap-2">
                           {times.court.map(t => (
-                              <span key={`c-${t}`} className="bg-blue-50 text-blue-800 px-2 py-1 rounded text-xs font-bold border border-blue-100 flex items-center gap-1">
+                              <span key={`c-${t}`} className="bg-yellow-50 text-yellow-800 px-2 py-1 rounded text-xs font-bold border border-yellow-100 flex items-center gap-1">
                                 <Activity size={10} /> {t}
                               </span>
                           ))}
                           {times.gourmet.map(t => (
-                              <span key={`g-${t}`} className="bg-purple-50 text-purple-800 px-2 py-1 rounded text-xs font-bold border border-purple-100 flex items-center gap-1">
+                              <span key={`g-${t}`} className="bg-yellow-50 text-yellow-800 px-2 py-1 rounded text-xs font-bold border border-yellow-100 flex items-center gap-1">
                                 <Utensils size={10} /> {t}
                               </span>
                           ))}
@@ -628,19 +804,14 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, courtName 
                     </div>
                  ))}
                </div>
-               {formData.courtSlots.length > 0 && (
-                 <div className="bg-stone-50 px-6 py-3 border-t border-stone-100 text-left flex justify-between items-center">
-                    <span className="text-sm text-stone-500">Esporte: <strong className="text-stone-700 capitalize">{formData.sport}</strong></span>
-                    {formData.includeBall && <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-bold">Bola Inclusa</span>}
-                 </div>
-               )}
             </div>
 
             <div className="text-stone-400 font-medium mt-8">
-              Redirecionando...
+              Fechando em instantes...
             </div>
-          </div>
+          </motion.div>
         )}
+        </AnimatePresence>
 
       </div>
     </div>

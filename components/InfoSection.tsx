@@ -2,7 +2,7 @@ import React from 'react';
 
 const InfoSection: React.FC = () => {
   return (
-    <section id="sobre" className="py-24 bg-white">
+    <section id="sobre" className="py-24 bg-white transition-colors duration-500">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <h2 className="text-3xl md:text-4xl font-bold text-stone-800 mb-12">
           Nossa Estrutura
@@ -33,8 +33,11 @@ const InfoSection: React.FC = () => {
             </ul>
           </div>
 
-          <div className="pt-8 text-stone-500 italic">
-            "Aqui, o foco é o jogo, a diversão e a conexão com a areia."
+          {/* Texto Simples */}
+          <div className="flex flex-col items-center justify-center">
+            <div className="pt-8 text-stone-500 italic select-none">
+              "Aqui, o foco é o jogo, a diversão e a conexão com a areia."
+            </div>
           </div>
         </div>
       </div>

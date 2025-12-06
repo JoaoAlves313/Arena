@@ -9,19 +9,20 @@ interface GalleryProps {
 const courts: CourtImage[] = [
   {
     id: 1,
-    url: "https://picsum.photos/800/600?random=101",
+    // Adicionado .webp para formato otimizado e dimensões na URL
+    url: "https://picsum.photos/800/600.webp?random=101",
     title: "Quadra Principal - Sunset",
     description: "Areia fina importada, ideal para partidas profissionais. Iluminação LED de alta performance."
   },
   {
     id: 2,
-    url: "https://picsum.photos/800/600?random=102",
+    url: "https://picsum.photos/800/600.webp?random=102",
     title: "Arena Treino A",
     description: "Perfeita para grupos iniciantes e aulas táticas. Espaço reservado e silencioso."
   },
   {
     id: 3,
-    url: "https://picsum.photos/800/600?random=103",
+    url: "https://picsum.photos/800/600.webp?random=103",
     title: "Quadra VIP Lounge",
     description: "Acesso exclusivo ao bar, cadeiras de praia premium e ducha privativa."
   }
@@ -42,10 +43,14 @@ const Gallery: React.FC<GalleryProps> = ({ onOpenBooking }) => {
           {courts.map((court) => (
             <div key={court.id} className="group bg-white rounded-3xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 border border-stone-100 flex flex-col">
               {/* Image Container */}
-              <div className="relative h-64 overflow-hidden">
+              <div className="relative h-64 overflow-hidden bg-stone-200">
                 <img 
                   src={court.url} 
-                  alt={court.title} 
+                  alt={court.title}
+                  loading="lazy"
+                  decoding="async"
+                  width={800}
+                  height={600}
                   className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
