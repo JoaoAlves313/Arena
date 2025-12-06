@@ -5,10 +5,14 @@ export interface CourtImage {
   description: string;
 }
 
-export interface BookingForm {
+export interface BookingSlot {
   date: string;
   time: string;
-  courtId: 'quadra1' | 'quadra2';
+}
+
+export interface BookingForm {
+  courtSlots: BookingSlot[];
+  gourmetSlots: BookingSlot[];
   sport: 'volei' | 'futevolei' | 'frescobol';
   includeBall: boolean;
 }
