@@ -1,87 +1,99 @@
 import React from 'react';
 import { CourtImage } from '../types';
-import { CalendarCheck } from 'lucide-react';
+import { CalendarCheck, MapPin, Wind } from 'lucide-react';
 
 interface GalleryProps {
   onOpenBooking: (courtName: string) => void;
+  isDark?: boolean;
 }
 
 const courts: CourtImage[] = [
   {
     id: 1,
-    // Adicionado .webp para formato otimizado e dimensões na URL
-    url: "https://picsum.photos/800/600.webp?random=101",
-    title: "Quadra Principal - Sunset",
-    description: "Areia fina importada, ideal para partidas profissionais. Iluminação LED de alta performance."
+    url: "https://images.unsplash.com/photo-1593787406536-3676215259c1?q=80&w=800&auto=format",
+    title: "Quadra Sunset",
+    description: "Areia fina tratada que não esquenta, ideal para alta performance. Iluminação LED 1000W."
   },
   {
     id: 2,
-    url: "https://picsum.photos/800/600.webp?random=102",
-    title: "Arena Treino A",
-    description: "Perfeita para grupos iniciantes e aulas táticas. Espaço reservado e silencioso."
+    url: "https://images.unsplash.com/photo-1628155930542-3c7a64e2c833?q=80&w=800&auto=format",
+    title: "Arena Training",
+    description: "Espaço técnico otimizado para aulas e treinos funcionais. Redes ajustáveis."
   },
   {
     id: 3,
-    url: "https://picsum.photos/800/600.webp?random=103",
-    title: "Quadra VIP Lounge",
-    description: "Acesso exclusivo ao bar, cadeiras de praia premium e ducha privativa."
+    url: "https://images.unsplash.com/photo-1544919396-10777977439a?q=80&w=800&auto=format",
+    title: "Lounge VIP",
+    description: "Conforto absoluto com deck exclusivo, ducha privativa e atendimento personalizado."
   }
 ];
 
-const Gallery: React.FC<GalleryProps> = ({ onOpenBooking }) => {
+const Gallery: React.FC<GalleryProps> = ({ onOpenBooking, isDark }) => {
   return (
-    <section id="galeria" className="py-20 bg-stone-50">
+    <section id="galeria" className={`py-24 transition-colors duration-500 ${isDark ? 'bg-stone-900' : 'bg-stone-100'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold text-stone-800 mb-4">Nossas Quadras</h2>
-          <p className="text-xl text-stone-600 max-w-2xl mx-auto">
-            Escolha o cenário perfeito para o seu jogo. Do lazer ao profissional, temos o espaço ideal.
-          </p>
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
+          <div className="max-w-2xl">
+            <h2 className={`text-5xl font-black mb-6 tracking-tight transition-colors ${isDark ? 'text-white' : 'text-stone-900'}`}>
+              ESCOLHA SUA <span className="text-sand">ARENA</span>
+            </h2>
+            <p className={`text-xl transition-colors ${isDark ? 'text-stone-400' : 'text-stone-600'}`}>
+              Instalações de nível profissional para quem não abre mão da qualidade em cada set.
+            </p>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
           {courts.map((court) => (
-            <div key={court.id} className="group bg-white rounded-3xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 border border-stone-100 flex flex-col">
-              {/* Image Container */}
-              <div className="relative h-64 overflow-hidden bg-stone-200">
+            <div 
+              key={court.id} 
+              className={`group rounded-[2.5rem] overflow-hidden shadow-2xl hover:shadow-sand/20 transition-all duration-500 border-2 flex flex-col ${isDark ? 'bg-stone-950 border-stone-800' : 'bg-white border-transparent'}`}
+            >
+              {/* Image Container with Overlay */}
+              <div className="relative h-80 overflow-hidden">
                 <img 
                   src={court.url} 
                   alt={court.title}
                   loading="lazy"
-                  decoding="async"
-                  width={800}
-                  height={600}
-                  className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
+                  className="w-full h-full object-cover transform scale-105 group-hover:scale-110 transition-transform duration-1000 ease-out"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                  <button 
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[2px]">
+                   <button 
                     onClick={() => onOpenBooking(court.title)}
-                    className="bg-sand text-white font-bold py-3 px-8 rounded-full transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 flex items-center gap-2 hover:bg-white hover:text-sand"
+                    className="bg-white text-stone-900 font-black py-4 px-10 rounded-full flex items-center gap-3 hover:bg-sand hover:text-white transition-all transform translate-y-4 group-hover:translate-y-0"
                   >
                     <CalendarCheck size={20} />
-                    Agendar Agora
+                    RESERVAR AGORA
                   </button>
+                </div>
+                <div className="absolute top-6 right-6 flex gap-2">
+                  <div className="bg-white/90 backdrop-blur p-2 rounded-full text-stone-900 shadow-lg">
+                    <Wind size={18} />
+                  </div>
                 </div>
               </div>
 
-              {/* Description Content */}
-              <div className="p-8 flex-1 flex flex-col justify-between">
+              {/* Content Area */}
+              <div className="p-10 flex-1 flex flex-col justify-between">
                 <div>
-                  <h3 className="text-2xl font-bold text-stone-800 mb-3 group-hover:text-sand transition-colors">
+                  <div className="flex items-center gap-2 text-sand font-bold text-xs uppercase tracking-widest mb-4">
+                    <MapPin size={14} />
+                    Localização Premium
+                  </div>
+                  <h3 className={`text-3xl font-black mb-4 transition-colors ${isDark ? 'text-white' : 'text-stone-800'}`}>
                     {court.title}
                   </h3>
-                  <p className="text-stone-600 leading-relaxed">
+                  <p className={`text-lg leading-relaxed transition-colors ${isDark ? 'text-stone-400' : 'text-stone-600'}`}>
                     {court.description}
                   </p>
                 </div>
                 
-                {/* Mobile Button (Visible mainly on mobile where hover isn't great) */}
-                <div className="mt-6 lg:hidden">
+                <div className="mt-8 lg:hidden">
                    <button 
                     onClick={() => onOpenBooking(court.title)}
-                    className="w-full bg-sand text-white font-bold py-3 rounded-xl shadow-md active:scale-95 transition-transform"
+                    className="w-full bg-sand hover:bg-sand-dark text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-all"
                   >
-                    Agendar Agora
+                    AGENDAR JOGO
                   </button>
                 </div>
               </div>

@@ -1,42 +1,54 @@
 import React from 'react';
+import { ShieldCheck, Droplets, Zap } from 'lucide-react';
 
-const InfoSection: React.FC = () => {
+interface InfoSectionProps {
+  isDark?: boolean;
+}
+
+const InfoSection: React.FC<InfoSectionProps> = ({ isDark }) => {
+  const features = [
+    { icon: <Droplets />, title: "Drenagem 4.0", desc: "Sistema que permite o jogo 15 minutos após chuvas intensas." },
+    { icon: <ShieldCheck />, title: "Areia Especial", desc: "Grãos arredondados que não agridem a pele e não retêm calor." },
+    { icon: <Zap />, title: "Iluminação TV", desc: "Refletores LED com zero sombra, perfeitos para fotos e vídeos." }
+  ];
+
   return (
-    <section id="sobre" className="py-24 bg-white transition-colors duration-500">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <h2 className="text-3xl md:text-4xl font-bold text-stone-800 mb-12">
-          Nossa Estrutura
-        </h2>
+    <section id="sobre" className={`py-32 transition-colors duration-500 ${isDark ? 'bg-stone-950' : 'bg-white'}`}>
+      <div className="max-w-7xl mx-auto px-6">
         
-        <div className="space-y-12 text-lg text-stone-600 leading-relaxed text-justify md:text-center">
-          <div>
-            <p className="mb-6">
-              A Arena Pé na Areia nasceu da paixão pelo esporte ao ar livre. Criamos um ambiente que une a competitividade do vôlei profissional com o relaxamento de um dia de praia. Nossas instalações contam com drenagem de última geração, garantindo jogos mesmo após chuvas fortes.
-            </p>
-          </div>
+        {/* Features Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-32">
+          {features.map((f, i) => (
+            <div key={i} className="flex flex-col items-center text-center">
+              <div className="bg-sand/10 text-sand p-6 rounded-3xl mb-6">
+                {/* Added explicit type casting to React.ReactElement<any> to resolve the 'size' prop type error */}
+                {React.cloneElement(f.icon as React.ReactElement<any>, { size: 32 })}
+              </div>
+              <h4 className={`text-xl font-bold mb-3 ${isDark ? 'text-white' : 'text-stone-900'}`}>{f.title}</h4>
+              <p className={isDark ? 'text-stone-400' : 'text-stone-600'}>{f.desc}</p>
+            </div>
+          ))}
+        </div>
 
-          <div className="border-t border-stone-100 pt-12">
-            <h3 className="text-2xl font-semibold text-stone-700 mb-6">Conheça Nossas Quadras</h3>
-            <ul className="space-y-8">
-              <li>
-                <strong className="block text-stone-800 text-xl mb-2">Quadra Principal - Sunset</strong>
-                <span className="block">A joia da nossa arena. Com areia fina importada que não esquenta, é o palco ideal para partidas profissionais e torneios. Possui iluminação LED de alta performance para jogos noturnos inesquecíveis.</span>
-              </li>
-              <li>
-                <strong className="block text-stone-800 text-xl mb-2">Arena Treino A</strong>
-                <span className="block">Projetada para aprendizado e evolução. Um espaço reservado e mais silencioso, perfeito para grupos de iniciantes, aulas táticas ou para quem quer focar na técnica sem distrações.</span>
-              </li>
-              <li>
-                <strong className="block text-stone-800 text-xl mb-2">Quadra VIP Lounge</strong>
-                <span className="block">Para quem busca exclusividade. Esta quadra oferece acesso direto ao bar, cadeiras de praia premium e ducha privativa, combinando o esporte com o lazer social.</span>
-              </li>
-            </ul>
-          </div>
+        <div className="max-w-4xl mx-auto">
+          <div className={`space-y-16 text-center transition-colors ${isDark ? 'text-stone-300' : 'text-stone-600'}`}>
+            <div>
+              <h2 className={`text-4xl md:text-5xl font-black mb-10 transition-colors ${isDark ? 'text-white' : 'text-stone-900'}`}>
+                TECNOLOGIA A SERVIÇO DO <span className="text-sand">ESPORTE</span>
+              </h2>
+              <p className="text-xl md:text-2xl leading-relaxed font-light">
+                Esqueça tudo o que você conhece sobre quadras de areia. Nossa arena foi projetada por atletas para oferecer a melhor experiência biomecânica, reduzindo o impacto nas articulações e maximizando a performance do seu salto.
+              </p>
+            </div>
 
-          {/* Texto Simples */}
-          <div className="flex flex-col items-center justify-center">
-            <div className="pt-8 text-stone-500 italic select-none">
-              "Aqui, o foco é o jogo, a diversão e a conexão com a areia."
+            <div className={`pt-16 border-t ${isDark ? 'border-stone-800' : 'border-stone-100'}`}>
+              <blockquote className="relative">
+                <span className="text-8xl text-sand/20 absolute -top-10 left-1/2 -translate-x-1/2 font-serif">“</span>
+                <p className={`text-2xl italic font-serif leading-relaxed ${isDark ? 'text-stone-400' : 'text-stone-500'}`}>
+                  "A melhor areia que já joguei. É como flutuar durante o jogo, sem se preocupar com o calor ou com o impacto."
+                </p>
+                <cite className="block mt-6 not-italic font-bold text-sand uppercase tracking-widest text-sm">— Ricardo Santos, Atleta Profissional</cite>
+              </blockquote>
             </div>
           </div>
         </div>

@@ -3,13 +3,12 @@ import { Instagram, Facebook, Twitter, Lock, User, Key, X, LogOut, CheckCircle }
 import { BookedSlots } from '../types';
 
 interface FooterProps {
-  bookedSlots?: BookedSlots; // Not needed for logic anymore but kept for interface compatibility if needed
-  onUpdateSlots?: (slots: BookedSlots) => void;
   onLogin?: (status: boolean) => void;
   isAdmin?: boolean;
+  isDark?: boolean;
 }
 
-const Footer: React.FC<FooterProps> = ({ onLogin, isAdmin }) => {
+const Footer: React.FC<FooterProps> = ({ onLogin, isAdmin, isDark }) => {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -39,7 +38,7 @@ const Footer: React.FC<FooterProps> = ({ onLogin, isAdmin }) => {
 
   return (
     <>
-      <footer className="bg-stone-900 text-stone-400 py-12 relative">
+      <footer className={`py-12 relative transition-colors duration-500 ${isDark ? 'bg-stone-900 border-t border-stone-800 text-stone-500' : 'bg-stone-900 text-stone-400'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="mb-6 md:mb-0">
@@ -77,7 +76,7 @@ const Footer: React.FC<FooterProps> = ({ onLogin, isAdmin }) => {
       {/* Modal de Login */}
       {isLoginOpen && (
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-stone-900 border border-stone-700 p-8 rounded-2xl w-full max-w-md shadow-2xl relative">
+          <div className={`border p-8 rounded-2xl w-full max-w-md shadow-2xl relative transition-colors ${isDark ? 'bg-stone-900 border-stone-800' : 'bg-stone-900 border-stone-700'}`}>
             <button 
               onClick={closeAll} 
               className="absolute top-4 right-4 text-stone-500 hover:text-white transition-colors"
