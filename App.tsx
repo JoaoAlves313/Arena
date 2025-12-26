@@ -1,18 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Header from './components/Header';
 import InfoSection from './components/InfoSection';
 import Gallery from './components/Gallery';
 import BookingModal from './components/BookingModal';
 import Footer from './components/Footer';
-import { ChevronDown, Moon, Sun } from 'lucide-react';
+import { ChevronDown, Moon, Sun, RefreshCw, CloudCheck } from 'lucide-react';
 import { BookedSlots } from './types';
+
+const API_ENDPOINT = '/api/slots'; // Endpoint que você criará para ler/gravar no Edge Config
 
 const App: React.FC = () => {
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [selectedCourt, setSelectedCourt] = useState<string>('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<Date>(new Date());
   
-  // Theme state with optimized persistence
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('arena_theme');
@@ -27,15 +30,36 @@ const App: React.FC = () => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
-  // Booking persistence
+  // Initial state from LocalStorage as fallback
   const [bookedSlots, setBookedSlots] = useState<BookedSlots>(() => {
     const saved = localStorage.getItem('arena_bookings');
     return saved ? JSON.parse(saved) : {};
   });
 
+  // Function to fetch data from Vercel Edge Config
+  const fetchRemoteSlots = useCallback(async (silent = false) => {
+    if (!silent) setIsSyncing(true);
+    try {
+      const response = await fetch(API_ENDPOINT);
+      if (response.ok) {
+        const remoteData = await response.json();
+        setBookedSlots(remoteData);
+        localStorage.setItem('arena_bookings', JSON.stringify(remoteData));
+        setLastSync(new Date());
+      }
+    } catch (error) {
+      console.warn('Erro ao sincronizar com Edge Config. Usando cache local.', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, []);
+
+  // Sync on mount and every 15 seconds (Polling)
   useEffect(() => {
-    localStorage.setItem('arena_bookings', JSON.stringify(bookedSlots));
-  }, [bookedSlots]);
+    fetchRemoteSlots();
+    const interval = setInterval(() => fetchRemoteSlots(true), 15000);
+    return () => clearInterval(interval);
+  }, [fetchRemoteSlots]);
 
   const handleOpenBooking = useCallback((courtName: string) => {
     setSelectedCourt(courtName);
@@ -50,8 +74,26 @@ const App: React.FC = () => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
 
-  const updateBookedSlots = (newSlots: BookedSlots) => {
+  const updateBookedSlots = async (newSlots: BookedSlots) => {
+    // Optimistic Update
     setBookedSlots(newSlots);
+    localStorage.setItem('arena_bookings', JSON.stringify(newSlots));
+
+    if (isAdmin) {
+      setIsSyncing(true);
+      try {
+        await fetch(API_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newSlots),
+        });
+        setLastSync(new Date());
+      } catch (error) {
+        console.error('Falha ao persistir no Edge Config:', error);
+      } finally {
+        setIsSyncing(false);
+      }
+    }
   };
 
   const handleLogin = (status: boolean) => {
@@ -68,17 +110,32 @@ const App: React.FC = () => {
     <div className={`min-h-screen transition-colors duration-700 ease-in-out ${isDark ? 'bg-stone-950 text-stone-100' : 'bg-white text-stone-800'} font-sans antialiased selection:bg-sand selection:text-white`}>
       <Header isDark={isDark} />
       
-      {/* Optimized Theme Toggle */}
-      <button 
-        onClick={toggleTheme}
-        aria-label="Alternar tema"
-        className={`fixed top-24 right-6 z-40 p-3 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 active:scale-90 ${isDark ? 'bg-white text-stone-900' : 'bg-stone-900 text-white'}`}
-      >
-        {isDark ? <Sun size={22} /> : <Moon size={22} />}
-      </button>
+      {/* Botões de Controle Flutuantes */}
+      <div className="fixed top-24 right-6 z-40 flex flex-col gap-3">
+        <button 
+          onClick={toggleTheme}
+          aria-label="Alternar tema"
+          className={`p-3 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 active:scale-90 ${isDark ? 'bg-white text-stone-900' : 'bg-stone-900 text-white'}`}
+        >
+          {isDark ? <Sun size={22} /> : <Moon size={22} />}
+        </button>
+        
+        {/* Indicador de Sincronização Cloud */}
+        <div className={`p-3 rounded-full shadow-2xl transition-all flex items-center justify-center ${isDark ? 'bg-stone-800 text-stone-400' : 'bg-stone-100 text-stone-500'}`}>
+          {isSyncing ? (
+            <RefreshCw size={20} className="animate-spin text-sand" />
+          ) : (
+            <div className="group relative">
+              <CloudCheck size={20} className="text-green-500" />
+              <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-stone-800 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap">
+                Sincronizado {lastSync.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       <main>
-        {/* Optimized Hero Banner */}
         <section className="relative h-screen w-full flex items-center justify-center overflow-hidden">
           <div className="absolute inset-0 z-0">
             <picture>
@@ -104,13 +161,13 @@ const App: React.FC = () => {
                 onClick={() => handleOpenBooking('Quadra Principal')}
                 className="group relative bg-sand hover:bg-sand-dark text-white text-xl font-bold py-5 px-12 rounded-full shadow-2xl transition-all overflow-hidden"
               >
-                <span className="relative z-10">{isAdmin ? 'MODO ADMINISTRADOR' : 'AGENDAR AGORA'}</span>
+                <span className="relative z-10">{isAdmin ? 'MODO PROPRIETÁRIO' : 'VER DISPONIBILIDADE'}</span>
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
               </button>
               {isAdmin && (
                 <div className="flex items-center gap-2 text-red-500 font-black text-sm tracking-widest uppercase">
                   <div className="w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
-                  Controle do Proprietário
+                  Sincronização Nuvem Ativa
                 </div>
               )}
             </div>

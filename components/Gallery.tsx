@@ -1,6 +1,6 @@
 import React from 'react';
 import { CourtImage } from '../types';
-import { CalendarCheck, MapPin, Wind } from 'lucide-react';
+import { CalendarCheck, MapPin, Wind, Eye } from 'lucide-react';
 
 interface GalleryProps {
   onOpenBooking: (courtName: string) => void;
@@ -35,10 +35,10 @@ const Gallery: React.FC<GalleryProps> = ({ onOpenBooking, isDark }) => {
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
           <div className="max-w-2xl">
             <h2 className={`text-5xl font-black mb-6 tracking-tight transition-colors ${isDark ? 'text-white' : 'text-stone-900'}`}>
-              ESCOLHA SUA <span className="text-sand">ARENA</span>
+              NOSSAS <span className="text-sand">ARENAS</span>
             </h2>
             <p className={`text-xl transition-colors ${isDark ? 'text-stone-400' : 'text-stone-600'}`}>
-              Instalações de nível profissional para quem não abre mão da qualidade em cada set.
+              Consulte a disponibilidade de cada uma de nossas quadras profissionais.
             </p>
           </div>
         </div>
@@ -49,7 +49,6 @@ const Gallery: React.FC<GalleryProps> = ({ onOpenBooking, isDark }) => {
               key={court.id} 
               className={`group rounded-[2.5rem] overflow-hidden shadow-2xl hover:shadow-sand/20 transition-all duration-500 border-2 flex flex-col ${isDark ? 'bg-stone-950 border-stone-800' : 'bg-white border-transparent'}`}
             >
-              {/* Image Container with Overlay */}
               <div className="relative h-80 overflow-hidden">
                 <img 
                   src={court.url} 
@@ -62,8 +61,8 @@ const Gallery: React.FC<GalleryProps> = ({ onOpenBooking, isDark }) => {
                     onClick={() => onOpenBooking(court.title)}
                     className="bg-white text-stone-900 font-black py-4 px-10 rounded-full flex items-center gap-3 hover:bg-sand hover:text-white transition-all transform translate-y-4 group-hover:translate-y-0"
                   >
-                    <CalendarCheck size={20} />
-                    RESERVAR AGORA
+                    <Eye size={20} />
+                    CONSULTAR AGENDA
                   </button>
                 </div>
                 <div className="absolute top-6 right-6 flex gap-2">
@@ -73,12 +72,11 @@ const Gallery: React.FC<GalleryProps> = ({ onOpenBooking, isDark }) => {
                 </div>
               </div>
 
-              {/* Content Area */}
               <div className="p-10 flex-1 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-sand font-bold text-xs uppercase tracking-widest mb-4">
                     <MapPin size={14} />
-                    Localização Premium
+                    Quadra Oficial
                   </div>
                   <h3 className={`text-3xl font-black mb-4 transition-colors ${isDark ? 'text-white' : 'text-stone-800'}`}>
                     {court.title}
@@ -93,7 +91,7 @@ const Gallery: React.FC<GalleryProps> = ({ onOpenBooking, isDark }) => {
                     onClick={() => onOpenBooking(court.title)}
                     className="w-full bg-sand hover:bg-sand-dark text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-all"
                   >
-                    AGENDAR JOGO
+                    VER DISPONIBILIDADE
                   </button>
                 </div>
               </div>
