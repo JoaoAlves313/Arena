@@ -23,7 +23,7 @@ const App: React.FC = () => {
     setIsLoading(true);
     setHasError(false);
     
-    // URL de dados sincronizada
+    // URL de dados sincronizada (Google Sheets Proxy)
     const url = "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLi6-T9jwmKm-vBDFHWMkV6JrvmaTImD0gVfebD_u53W43D-eV9qpP-kpx0inncRvdbHFUvxKI7hrepBzh9KHNjMVijHXhfhKObPhtA7-uqx_EDzydIoHonuIoFp1a5gmEbgXP4eoNVbdhEeXEXIJltGJEcDIwzieFuq3RvT8WP3N2UexmgToL-YE9LxOH4YB7ewQLNaLnTVs7ghSr0aMSJvGQaLt2IQNHACZUJnrk24Vx6TkuPy2UfxbIhBkdSHGZTuKrW2GuFx2kY2fzFjXUM5T9jyWA&lib=MHEVcKrNdvnYWxRUMinEg6-5P6VriA9Lh";
 
     try {
@@ -48,9 +48,18 @@ const App: React.FC = () => {
         
         let dateStr = "";
         try {
-          const d = new Date(rawDate);
-          if (isNaN(d.getTime())) return;
-          dateStr = d.toISOString().split('T')[0];
+          // "Ignora o T00:00:00.000Z": Pegamos apenas os primeiros 10 caracteres (AAAA-MM-DD)
+          // Isso evita que o fuso horário altere o dia ao dar "new Date()"
+          const cleanDateStr = String(rawDate).split('T')[0].trim();
+          
+          // Validamos se a string resultante tem o formato de data básico
+          if (cleanDateStr.length >= 8) {
+            const d = new Date(cleanDateStr + 'T12:00:00'); // Usamos meio-dia para garantir estabilidade
+            if (isNaN(d.getTime())) return;
+            dateStr = d.toISOString().split('T')[0];
+          } else {
+            return;
+          }
         } catch (e) { return; }
 
         hours.forEach(h => {
@@ -78,8 +87,6 @@ const App: React.FC = () => {
         Object.keys(data).forEach(key => {
           if (Array.isArray(data[key])) {
             data[key].forEach(processRow);
-          } else if (typeof data[key] === 'object') {
-             processRow(data[key]);
           }
         });
       }
