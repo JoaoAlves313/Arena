@@ -3,50 +3,55 @@ export const config = {
   runtime: 'edge',
 };
 
+/**
+ * Handler para sincronização da agenda com Vercel Edge Config.
+ * Suporta GET para leitura e POST para atualização (requer VERCEL_ACCESS_TOKEN).
+ */
 export default async function handler(req: Request) {
   const edgeConfigUrl = process.env.EDGE_CONFIG;
   
   if (!edgeConfigUrl) {
-    return new Response(JSON.stringify({ error: 'Configuração EDGE_CONFIG não encontrada.' }), { 
+    return new Response(JSON.stringify({ 
+      error: 'Configuração ausente', 
+      message: 'A variável EDGE_CONFIG não foi encontrada no ambiente.' 
+    }), { 
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });
   }
 
-  // Extrair o ID do Edge Config da URL (ex: ecfg_xxxxxxxx)
-  const configId = edgeConfigUrl.split('/').pop()?.split('?')[0];
+  const baseUrl = edgeConfigUrl.split('?')[0];
+  const configId = baseUrl.split('/').pop();
 
-  // OPERAÇÃO DE LEITURA (GET)
+  // --- LEITURA ---
   if (req.method === 'GET') {
     try {
-      // Busca direta do item 'slots' na Edge Config
-      const readUrl = `${edgeConfigUrl.split('?')[0]}/item/slots?${edgeConfigUrl.split('?')[1]}`;
-      const response = await fetch(readUrl);
-      const data = await response.json();
+      const response = await fetch(`${baseUrl}/item/slots?${edgeConfigUrl.split('?')[1]}`);
+      if (!response.ok) return new Response(JSON.stringify({}), { status: 200 });
       
+      const data = await response.json();
       return new Response(JSON.stringify(data || {}), {
         status: 200,
         headers: { 
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-store, max-age=0' // Garante dados frescos
+          'Cache-Control': 'no-store' 
         },
       });
     } catch (err) {
-      return new Response(JSON.stringify({ error: 'Erro ao ler dados' }), { status: 500 });
+      return new Response(JSON.stringify({ error: 'Erro na leitura' }), { status: 500 });
     }
   }
 
-  // OPERAÇÃO DE ESCRITA (POST)
+  // --- ESCRITA ---
   if (req.method === 'POST') {
     try {
-      const body = await req.json();
+      const newData = await req.json();
       const token = process.env.VERCEL_ACCESS_TOKEN;
 
       if (!token) {
-        return new Response(JSON.stringify({ error: 'Token de acesso Vercel não configurado.' }), { status: 500 });
+        return new Response(JSON.stringify({ error: 'Token ausente' }), { status: 401 });
       }
 
-      // Chamada à API REST da Vercel para atualizar o item
       const updateRes = await fetch(
         `https://api.vercel.com/v1/edge-config/${configId}/items`,
         {
@@ -56,25 +61,17 @@ export default async function handler(req: Request) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            items: [
-              {
-                operation: 'upsert',
-                key: 'slots',
-                value: body,
-              },
-            ],
+            items: [{ operation: 'upsert', key: 'slots', value: newData }],
           }),
         }
       );
 
       if (updateRes.ok) {
         return new Response(JSON.stringify({ success: true }), { status: 200 });
-      } else {
-        const errorData = await updateRes.json();
-        return new Response(JSON.stringify(errorData), { status: updateRes.status });
       }
+      return new Response(JSON.stringify({ error: 'Erro na Vercel API' }), { status: 500 });
     } catch (err) {
-      return new Response(JSON.stringify({ error: 'Erro ao processar requisição' }), { status: 500 });
+      return new Response(JSON.stringify({ error: 'Erro no processamento' }), { status: 500 });
     }
   }
 

@@ -1,19 +1,29 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import Header from './components/Header';
 import InfoSection from './components/InfoSection';
 import Gallery from './components/Gallery';
 import BookingModal from './components/BookingModal';
 import Footer from './components/Footer';
-import { ChevronDown, Moon, Sun, RefreshCw, CloudCheck } from 'lucide-react';
+import { ChevronDown, CloudCheck, RefreshCw, AlertCircle } from 'lucide-react';
 import { BookedSlots } from './types';
 
-const API_ENDPOINT = '/api/slots'; // Endpoint que você criará para ler/gravar no Edge Config
+// Inicialização segura do cliente Supabase
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+
+// Só cria o cliente se as chaves existirem para evitar o erro "supabaseUrl is required"
+const supabase = (supabaseUrl && supabaseAnonKey) 
+  ? createClient(supabaseUrl, supabaseAnonKey) 
+  : null;
 
 const App: React.FC = () => {
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [selectedCourt, setSelectedCourt] = useState<string>('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState(false);
   const [lastSync, setLastSync] = useState<Date>(new Date());
   
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -25,41 +35,72 @@ const App: React.FC = () => {
     return 'light';
   });
 
-  useEffect(() => {
-    localStorage.setItem('arena_theme', theme);
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-  }, [theme]);
-
-  // Initial state from LocalStorage as fallback
   const [bookedSlots, setBookedSlots] = useState<BookedSlots>(() => {
     const saved = localStorage.getItem('arena_bookings');
     return saved ? JSON.parse(saved) : {};
   });
 
-  // Function to fetch data from Vercel Edge Config
-  const fetchRemoteSlots = useCallback(async (silent = false) => {
-    if (!silent) setIsSyncing(true);
+  // Efeito para o tema
+  useEffect(() => {
+    localStorage.setItem('arena_theme', theme);
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  }, [theme]);
+
+  // Função para buscar dados do Supabase
+  const fetchSlots = useCallback(async () => {
+    if (!supabase) {
+      console.warn('Supabase não configurado. Operando em modo LocalStorage.');
+      return;
+    }
+    
+    setIsSyncing(true);
     try {
-      const response = await fetch(API_ENDPOINT);
-      if (response.ok) {
-        const remoteData = await response.json();
-        setBookedSlots(remoteData);
-        localStorage.setItem('arena_bookings', JSON.stringify(remoteData));
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*');
+
+      if (error) throw error;
+
+      if (data) {
+        const slotsMap: BookedSlots = {};
+        data.forEach((row: any) => {
+          slotsMap[row.slot_key] = { court: row.court, gourmet: row.gourmet };
+        });
+        setBookedSlots(slotsMap);
+        localStorage.setItem('arena_bookings', JSON.stringify(slotsMap));
         setLastSync(new Date());
+        setSyncError(false);
       }
-    } catch (error) {
-      console.warn('Erro ao sincronizar com Edge Config. Usando cache local.', error);
+    } catch (err) {
+      console.error('Erro ao buscar dados do Supabase:', err);
+      setSyncError(true);
     } finally {
-      setIsSyncing(false);
+      // Pequeno delay para feedback visual
+      setTimeout(() => setIsSyncing(false), 600);
     }
   }, []);
 
-  // Sync on mount and every 15 seconds (Polling)
+  // Inscrição em tempo real e busca inicial
   useEffect(() => {
-    fetchRemoteSlots();
-    const interval = setInterval(() => fetchRemoteSlots(true), 15000);
-    return () => clearInterval(interval);
-  }, [fetchRemoteSlots]);
+    fetchSlots();
+
+    if (!supabase) return;
+
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings' },
+        () => {
+          fetchSlots();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchSlots]);
 
   const handleOpenBooking = useCallback((courtName: string) => {
     setSelectedCourt(courtName);
@@ -75,23 +116,32 @@ const App: React.FC = () => {
   };
 
   const updateBookedSlots = async (newSlots: BookedSlots) => {
-    // Optimistic Update
+    // Atualização otimista na UI e LocalStorage
     setBookedSlots(newSlots);
     localStorage.setItem('arena_bookings', JSON.stringify(newSlots));
-
-    if (isAdmin) {
+    
+    if (isAdmin && supabase) {
       setIsSyncing(true);
       try {
-        await fetch(API_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newSlots),
-        });
+        const upsertData = Object.entries(newSlots).map(([key, val]) => ({
+          slot_key: key,
+          court: val.court,
+          gourmet: val.gourmet
+        }));
+
+        const { error } = await supabase
+          .from('bookings')
+          .upsert(upsertData, { onConflict: 'slot_key' });
+
+        if (error) throw error;
+        
+        setSyncError(false);
         setLastSync(new Date());
-      } catch (error) {
-        console.error('Falha ao persistir no Edge Config:', error);
+      } catch (err) {
+        console.error('Erro ao salvar no Supabase:', err);
+        setSyncError(true);
       } finally {
-        setIsSyncing(false);
+        setTimeout(() => setIsSyncing(false), 600);
       }
     }
   };
@@ -100,35 +150,41 @@ const App: React.FC = () => {
     setIsAdmin(status);
   };
 
-  const scrollToInfo = () => {
-    document.getElementById('sobre')?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToGallery = () => {
+    document.getElementById('galeria')?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const isDark = theme === 'dark';
+  const isSupabaseConfigured = !!supabase;
 
   return (
     <div className={`min-h-screen transition-colors duration-700 ease-in-out ${isDark ? 'bg-stone-950 text-stone-100' : 'bg-white text-stone-800'} font-sans antialiased selection:bg-sand selection:text-white`}>
       <Header isDark={isDark} />
       
-      {/* Botões de Controle Flutuantes */}
-      <div className="fixed top-24 right-6 z-40 flex flex-col gap-3">
-        <button 
-          onClick={toggleTheme}
-          aria-label="Alternar tema"
-          className={`p-3 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 active:scale-90 ${isDark ? 'bg-white text-stone-900' : 'bg-stone-900 text-white'}`}
-        >
-          {isDark ? <Sun size={22} /> : <Moon size={22} />}
-        </button>
-        
-        {/* Indicador de Sincronização Cloud */}
-        <div className={`p-3 rounded-full shadow-2xl transition-all flex items-center justify-center ${isDark ? 'bg-stone-800 text-stone-400' : 'bg-stone-100 text-stone-500'}`}>
+      {/* Indicador de Status de Sincronização */}
+      <div className="fixed top-24 right-6 z-40">
+        <div className={`p-3 rounded-full shadow-2xl flex items-center justify-center transition-colors ${isDark ? 'bg-stone-800' : 'bg-stone-100'}`}>
           {isSyncing ? (
             <RefreshCw size={20} className="animate-spin text-sand" />
-          ) : (
+          ) : syncError ? (
             <div className="group relative">
+              <AlertCircle size={20} className="text-red-500 cursor-help" />
+              <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-red-600 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap uppercase font-bold">
+                Erro de Sincronização
+              </div>
+            </div>
+          ) : !isSupabaseConfigured ? (
+            <div className="group relative cursor-help">
+              <AlertCircle size={20} className="text-amber-500" />
+              <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-amber-600 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap uppercase font-bold tracking-widest">
+                Modo Local (Offline)
+              </div>
+            </div>
+          ) : (
+            <div className="group relative cursor-help">
               <CloudCheck size={20} className="text-green-500" />
-              <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-stone-800 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap">
-                Sincronizado {lastSync.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+              <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap uppercase font-bold tracking-widest">
+                CONECTADO: {lastSync.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
               </div>
             </div>
           )}
@@ -138,14 +194,11 @@ const App: React.FC = () => {
       <main>
         <section className="relative h-screen w-full flex items-center justify-center overflow-hidden">
           <div className="absolute inset-0 z-0">
-            <picture>
-              <source srcSet="https://picsum.photos/1920/1080?random=99" media="(min-width: 800px)" />
-              <img 
-                src="https://picsum.photos/800/600?random=99" 
-                alt="Arena de Vôlei" 
-                className="w-full h-full object-cover scale-105 animate-slow-zoom"
-              />
-            </picture>
+            <img 
+              src="https://images.unsplash.com/photo-1593787406536-3676215259c1?q=80&w=1920&auto=format" 
+              alt="Arena de Vôlei" 
+              className="w-full h-full object-cover scale-105 animate-slow-zoom" 
+            />
             <div className={`absolute inset-0 transition-opacity duration-1000 ${isDark ? 'bg-black/70' : 'bg-stone-900/40'}`}></div>
           </div>
           
@@ -154,36 +207,27 @@ const App: React.FC = () => {
               ARENA <span className="text-sand italic">PÉ NA AREIA</span>
             </h1>
             <p className="text-xl md:text-2xl text-stone-200 mb-10 drop-shadow-lg font-light tracking-wide">
-              Quadras profissionais com drenagem inteligente e ambiente premium para o seu melhor jogo.
+              Agendamento inteligente em tempo real. {isSupabaseConfigured ? 'Integrado com Supabase.' : 'Armazenamento local ativo.'}
             </p>
             <div className="flex flex-col gap-5 items-center">
               <button 
-                onClick={() => handleOpenBooking('Quadra Principal')}
+                onClick={scrollToGallery}
                 className="group relative bg-sand hover:bg-sand-dark text-white text-xl font-bold py-5 px-12 rounded-full shadow-2xl transition-all overflow-hidden"
               >
-                <span className="relative z-10">{isAdmin ? 'MODO PROPRIETÁRIO' : 'VER DISPONIBILIDADE'}</span>
+                <span className="relative z-10">EXPLORAR ARENAS</span>
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
               </button>
-              {isAdmin && (
-                <div className="flex items-center gap-2 text-red-500 font-black text-sm tracking-widest uppercase">
-                  <div className="w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
-                  Sincronização Nuvem Ativa
-                </div>
-              )}
             </div>
           </div>
           
-          <button 
-            className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 cursor-pointer animate-bounce opacity-50 hover:opacity-100 transition-opacity"
-            onClick={scrollToInfo}
-            aria-label="Rolar para baixo"
-          >
+          <button className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 cursor-pointer animate-bounce opacity-50" onClick={scrollToGallery}>
             <ChevronDown className="text-white w-12 h-12" />
           </button>
         </section>
 
-        <InfoSection isDark={isDark} />
         <Gallery onOpenBooking={handleOpenBooking} isDark={isDark} />
+        
+        <InfoSection isDark={isDark} onToggleTheme={toggleTheme} />
       </main>
 
       <Footer onLogin={handleLogin} isAdmin={isAdmin} isDark={isDark} />
